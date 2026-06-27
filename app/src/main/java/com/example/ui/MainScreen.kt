@@ -537,7 +537,7 @@ fun FileSelectorScreen(
                     value = currentModel,
                     onValueChange = { viewModel.selectedModel = it },
                     label = { Text("Nome do Modelo Gemini", style = MaterialTheme.typography.bodySmall) },
-                    placeholder = { Text("Ex: gemini-1.5-flash") },
+                    placeholder = { Text("Ex: gemini-3.1-flash-lite") },
                     singleLine = true,
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier
@@ -556,24 +556,28 @@ fun FileSelectorScreen(
                     Text(
                         text = "Atalhos rápidos:",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    FilterChip(
-                        selected = currentModel == "gemini-1.5-flash",
-                        onClick = { viewModel.selectedModel = "gemini-1.5-flash" },
-                        label = { Text("1.5 Flash", style = MaterialTheme.typography.bodySmall) }
-                    )
-                    FilterChip(
-                        selected = currentModel == "gemini-1.5-pro",
-                        onClick = { viewModel.selectedModel = "gemini-1.5-pro" },
-                        label = { Text("1.5 Pro", style = MaterialTheme.typography.bodySmall) }
-                    )
-                    FilterChip(
-                        selected = currentModel == "gemini-2.5-flash",
-                        onClick = { viewModel.selectedModel = "gemini-2.5-flash" },
-                        label = { Text("2.5 Flash", style = MaterialTheme.typography.bodySmall) }
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                    ) {
+                        FilterChip(
+                            selected = currentModel == "gemini-3.1-flash-lite",
+                            onClick = { viewModel.selectedModel = "gemini-3.1-flash-lite" },
+                            label = { Text("3.1 Lite", style = MaterialTheme.typography.bodySmall) }
+                        )
+                        FilterChip(
+                            selected = currentModel == "gemini-1.5-flash",
+                            onClick = { viewModel.selectedModel = "gemini-1.5-flash" },
+                            label = { Text("1.5 Flash", style = MaterialTheme.typography.bodySmall) }
+                        )
+                        FilterChip(
+                            selected = currentModel == "gemini-2.5-flash",
+                            onClick = { viewModel.selectedModel = "gemini-2.5-flash" },
+                            label = { Text("2.5 Flash", style = MaterialTheme.typography.bodySmall) }
+                        )
+                    }
                 }
             }
         }
@@ -1066,7 +1070,7 @@ fun SettingsTabContent(viewModel: AuditViewModel) {
                 .testTag("github_token_input")
         )
         Text(
-            text = "Para gerar um token, vá no GitHub: Settings > Developer Settings > Personal Access Tokens > Tokens (classic). É necessário marcar o escopo 'repo'.",
+            text = "Para gerar um token, vai no GitHub: Settings > Developer Settings > Personal Access Tokens > Tokens (classic). É necessário marcar o escopo 'repo'.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
@@ -1124,7 +1128,7 @@ fun SettingsTabContent(viewModel: AuditViewModel) {
             value = modelInput,
             onValueChange = { modelInput = it },
             label = { Text("Nome do Modelo Gemini") },
-            placeholder = { Text("Ex: gemini-1.5-flash") },
+            placeholder = { Text("Ex: gemini-3.1-flash-lite") },
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
@@ -1145,17 +1149,17 @@ fun SettingsTabContent(viewModel: AuditViewModel) {
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(
+                    selected = modelInput == "gemini-3.1-flash-lite",
+                    onClick = { modelInput = "gemini-3.1-flash-lite" }
+                )
+                Text("3.1 Lite", style = MaterialTheme.typography.bodyMedium)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(
                     selected = modelInput == "gemini-1.5-flash",
                     onClick = { modelInput = "gemini-1.5-flash" }
                 )
                 Text("1.5 Flash", style = MaterialTheme.typography.bodyMedium)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(
-                    selected = modelInput == "gemini-1.5-pro",
-                    onClick = { modelInput = "gemini-1.5-pro" }
-                )
-                Text("1.5 Pro", style = MaterialTheme.typography.bodyMedium)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(
@@ -1331,7 +1335,7 @@ fun AuditDetailsScreen(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                Divider(color = statusColor.copy(alpha = 0.2f))
+                HorizontalDivider(color = statusColor.copy(alpha = 0.2f))
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Counts
@@ -1403,257 +1407,390 @@ fun CountIndicator(count: Int, label: String, color: Color) {
 }
 
 // ==========================================
-// EXCELENT MARKDOWN PARSER FOR COMPOSE
+// GITHUB-STYLE MARKDOWN RENDERER
 // ==========================================
+
+sealed class MarkdownNode {
+    data class Heading(val level: Int, val text: String) : MarkdownNode()
+    data class Paragraph(val text: String) : MarkdownNode()
+    data class BulletItem(val text: String, val indent: Int = 0) : MarkdownNode()
+    data class NumberedItem(val number: Int, val text: String, val indent: Int = 0) : MarkdownNode()
+    data class CheckItem(val checked: Boolean, val text: String) : MarkdownNode()
+    data class CodeBlockNode(val code: String, val language: String) : MarkdownNode()
+    data class TableBlock(val headers: List<String>, val rows: List<List<String>>) : MarkdownNode()
+    data class BlockQuote(val text: String) : MarkdownNode()
+    object HorizontalRule : MarkdownNode()
+    object Blank : MarkdownNode()
+}
+
+fun parseMarkdown(markdown: String): List<MarkdownNode> {
+    val nodes = mutableListOf<MarkdownNode>()
+    val rawLines = markdown.split("\n")
+    var i = 0
+    while (i < rawLines.size) {
+        val line = rawLines[i]
+        val trimmed = line.trim()
+
+        // Code block
+        if (trimmed.startsWith("```")) {
+            val lang = trimmed.removePrefix("```").trim()
+            val codeLines = mutableListOf<String>()
+            i++
+            while (i < rawLines.size && !rawLines[i].trim().startsWith("```")) {
+                codeLines.add(rawLines[i]); i++
+            }
+            nodes.add(MarkdownNode.CodeBlockNode(codeLines.joinToString("\n"), lang))
+            i++; continue
+        }
+
+        // HR
+        if (trimmed.matches(Regex("^(---+|===+|\\*\\*\\*+)$"))) {
+            nodes.add(MarkdownNode.HorizontalRule); i++; continue
+        }
+
+        // Blockquote
+        if (trimmed.startsWith("> ")) {
+            nodes.add(MarkdownNode.BlockQuote(trimmed.removePrefix("> ")))
+            i++; continue
+        }
+
+        // Headings (# to ######)
+        val headingMatch = Regex("^(#{1,6}) (.+)$").find(trimmed)
+        if (headingMatch != null) {
+            nodes.add(MarkdownNode.Heading(headingMatch.groupValues[1].length,
+                headingMatch.groupValues[2].replace(Regex("\\*+"), "")))
+            i++; continue
+        }
+
+        // Table with explicit header separator
+        if (trimmed.startsWith("|") && i + 1 < rawLines.size && rawLines[i + 1].trim().contains("---")) {
+            val headers = trimmed.split("|").map { it.trim() }.filter { it.isNotEmpty() }
+            i += 2
+            val rows = mutableListOf<List<String>>()
+            while (i < rawLines.size && rawLines[i].trim().startsWith("|")) {
+                rows.add(rawLines[i].trim().split("|").map { it.trim() }.filter { it.isNotEmpty() })
+                i++
+            }
+            nodes.add(MarkdownNode.TableBlock(headers, rows)); continue
+        }
+
+        // Skip lone separator lines
+        if (trimmed.startsWith("|") && trimmed.contains("---")) { i++; continue }
+
+        // Inline table rows
+        if (trimmed.startsWith("|")) {
+            val allRows = mutableListOf(trimmed.split("|").map { it.trim() }.filter { it.isNotEmpty() })
+            i++
+            while (i < rawLines.size) {
+                val nt = rawLines[i].trim()
+                when {
+                    nt.startsWith("|") && !nt.contains("---") -> { allRows.add(nt.split("|").map { it.trim() }.filter { it.isNotEmpty() }); i++ }
+                    nt.startsWith("|") && nt.contains("---") -> i++
+                    else -> break
+                }
+            }
+            if (allRows.size > 1) nodes.add(MarkdownNode.TableBlock(allRows[0], allRows.drop(1)))
+            else nodes.add(MarkdownNode.Paragraph(allRows[0].joinToString(" | ")))
+            continue
+        }
+
+        // Checkboxes
+        if (trimmed.startsWith("- [ ] ")) { nodes.add(MarkdownNode.CheckItem(false, trimmed.removePrefix("- [ ] "))); i++; continue }
+        if (trimmed.startsWith("- [x] ") || trimmed.startsWith("- [X] ")) {
+            nodes.add(MarkdownNode.CheckItem(true, trimmed.removePrefix("- [x] ").removePrefix("- [X] "))); i++; continue
+        }
+
+        // Bullets
+        val bulletMatch = Regex("^(\\s*)[\\-\\*] (.+)$").find(line)
+        if (bulletMatch != null) { nodes.add(MarkdownNode.BulletItem(bulletMatch.groupValues[2], bulletMatch.groupValues[1].length / 2)); i++; continue }
+
+        // Numbered
+        val numMatch = Regex("^(\\s*)(\\d+)\\. (.+)$").find(line)
+        if (numMatch != null) { nodes.add(MarkdownNode.NumberedItem(numMatch.groupValues[2].toIntOrNull() ?: 1, numMatch.groupValues[3], numMatch.groupValues[1].length / 2)); i++; continue }
+
+        // Blank
+        if (trimmed.isEmpty()) { nodes.add(MarkdownNode.Blank); i++; continue }
+
+        // Paragraph
+        nodes.add(MarkdownNode.Paragraph(line)); i++
+    }
+    return nodes
+}
+
+fun parseInlineMarkdown(text: String, codeInlineBg: Color, codeInlineFg: Color): AnnotatedString {
+    return buildAnnotatedString {
+        var i = 0
+        val s = text.trim()
+        while (i < s.length) {
+            when {
+                s.startsWith("***", i) -> { val e = s.indexOf("***", i + 3); if (e != -1) { withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) { append(s.substring(i + 3, e)) }; i = e + 3 } else { append(s[i]); i++ } }
+                s.startsWith("**", i) -> { val e = s.indexOf("**", i + 2); if (e != -1) { withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(s.substring(i + 2, e)) }; i = e + 2 } else { append(s[i]); i++ } }
+                s.startsWith("*", i) && !s.startsWith("**", i) -> { val e = s.indexOf("*", i + 1); if (e != -1 && !s.startsWith("**", e)) { withStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) { append(s.substring(i + 1, e)) }; i = e + 1 } else { append(s[i]); i++ } }
+                s.startsWith("`", i) -> { val e = s.indexOf("`", i + 1); if (e != -1) { withStyle(SpanStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = codeInlineFg, background = codeInlineBg)) { append(" ${s.substring(i + 1, e)} ") }; i = e + 1 } else { append(s[i]); i++ } }
+                s.startsWith("~~", i) -> { val e = s.indexOf("~~", i + 2); if (e != -1) { withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { append(s.substring(i + 2, e)) }; i = e + 2 } else { append(s[i]); i++ } }
+                else -> { append(s[i]); i++ }
+            }
+        }
+    }
+}
+
+@Composable
+fun GitHubCodeBlock(code: String, language: String, isDark: Boolean) {
+    val bgColor = if (isDark) Color(0xFF161B22) else Color(0xFFF6F8FA)
+    val borderColor = if (isDark) Color(0xFF30363D) else Color(0xFFD0D7DE)
+    val headerBg = if (isDark) Color(0xFF21262D) else Color(0xFFEAECEF)
+    val langColor = if (isDark) Color(0xFF8B949E) else Color(0xFF57606A)
+    val codeColor = if (isDark) Color(0xFFE6EDF3) else Color(0xFF24292F)
+
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = bgColor,
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            if (language.isNotEmpty()) {
+                Surface(color = headerBg, modifier = Modifier.fillMaxWidth()) {
+                    Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Code, contentDescription = null, tint = langColor, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = language.lowercase(), style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = langColor, fontWeight = FontWeight.Medium)
+                    }
+                }
+                HorizontalDivider(color = borderColor, thickness = 1.dp)
+            }
+            Box(modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(16.dp)
+            ) {
+                Text(text = code, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 20.sp, color = codeColor))
+            }
+        }
+    }
+}
+
+@Composable
+fun GitHubTable(
+    headers: List<String>,
+    rows: List<List<String>>,
+    borderColor: Color,
+    headerBg: Color,
+    altRowBg: Color,
+    codeInlineBg: Color,
+    codeInlineFg: Color
+) {
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val cellColor = if (isDark) Color(0xFFE6EDF3) else Color(0xFF24292F)
+
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            // Header row
+            if (headers.isNotEmpty()) {
+                Surface(color = headerBg) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        headers.forEachIndexed { idx, h ->
+                            Box(modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(parseInlineMarkdown(h, codeInlineBg, codeInlineFg),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold, color = cellColor)
+                            }
+                            if (idx < headers.lastIndex) {
+                                Box(modifier = Modifier.fillMaxHeight().width(1.dp).background(borderColor))
+                            }
+                        }
+                    }
+                }
+                HorizontalDivider(color = borderColor, thickness = 1.dp)
+            }
+            // Data rows
+            rows.forEachIndexed { ri, row ->
+                val rowBg = if (ri % 2 == 1) altRowBg else Color.Transparent
+                Surface(color = rowBg) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        val cols = maxOf(headers.size, row.size)
+                        (0 until cols).forEach { ci ->
+                            Box(modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(parseInlineMarkdown(row.getOrElse(ci) { "" }, codeInlineBg, codeInlineFg),
+                                    style = MaterialTheme.typography.bodySmall, color = cellColor)
+                            }
+                            if (ci < cols - 1) {
+                                Box(modifier = Modifier.fillMaxHeight().width(1.dp).background(borderColor))
+                            }
+                        }
+                    }
+                }
+                if (ri < rows.lastIndex) HorizontalDivider(color = borderColor, thickness = 0.5.dp)
+            }
+        }
+    }
+}
 
 @Composable
 fun MarkdownText(markdown: String, modifier: Modifier = Modifier) {
-    val lines = markdown.split("\n")
-    var inCodeBlock = false
-    val codeBlockLines = remember { mutableStateListOf<String>() }
-    var codeBlockLanguage = ""
+    val nodes = remember(markdown) { parseMarkdown(markdown) }
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
 
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        for (line in lines) {
-            val trimmedLine = line.trim()
-            if (trimmedLine.startsWith("```")) {
-                if (inCodeBlock) {
-                    // Render finished code block
-                    CodeBlock(codeBlockLines.joinToString("\n"), codeBlockLanguage)
-                    codeBlockLines.clear()
-                    inCodeBlock = false
-                } else {
-                    inCodeBlock = true
-                    codeBlockLanguage = trimmedLine.removePrefix("```").trim()
-                }
-                continue
-            }
+    val codeInlineBg = if (isDark) Color(0xFF2D333B) else Color(0xFFF0F0F0)
+    val codeInlineFg = if (isDark) Color(0xFFE06C75) else Color(0xFFD73A49)
+    val tableBorderColor = if (isDark) Color(0xFF444C56) else Color(0xFFD0D7DE)
+    val tableHeaderBg = if (isDark) Color(0xFF2D333B) else Color(0xFFF6F8FA)
+    val tableAltBg = if (isDark) Color(0xFF22272E).copy(alpha = 0.6f) else Color(0xFFFAFBFC)
+    val blockQuoteBg = if (isDark) Color(0xFF2D333B) else Color(0xFFF6F8FA)
+    val blockQuoteBorder = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+    val hrColor = if (isDark) Color(0xFF3B434B) else Color(0xFFD0D7DE)
 
-            if (inCodeBlock) {
-                codeBlockLines.add(line)
-                continue
-            }
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        nodes.forEach { node ->
+            when (node) {
+                is MarkdownNode.Blank -> Spacer(modifier = Modifier.height(8.dp))
 
-            when {
-                line.startsWith("# ") -> {
+                is MarkdownNode.HorizontalRule -> {
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = line.substring(2).replace("**", ""),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    HorizontalDivider(color = hrColor, thickness = 1.dp)
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
-                line.startsWith("## ") -> {
+
+                is MarkdownNode.Heading -> {
+                    val textStyle = when (node.level) {
+                        1 -> MaterialTheme.typography.headlineMedium
+                        2 -> MaterialTheme.typography.headlineSmall
+                        3 -> MaterialTheme.typography.titleLarge
+                        4 -> MaterialTheme.typography.titleMedium
+                        5 -> MaterialTheme.typography.titleSmall
+                        else -> MaterialTheme.typography.bodyLarge
+                    }
+                    val topPad = when (node.level) { 1 -> 20.dp; 2 -> 16.dp; 3 -> 12.dp; 4 -> 10.dp; else -> 8.dp }
+                    val botPad = when (node.level) { 1 -> 8.dp; 2 -> 6.dp; else -> 4.dp }
+                    val headingColor = when (node.level) {
+                        1, 2 -> MaterialTheme.colorScheme.primary
+                        3 -> MaterialTheme.colorScheme.onSurface
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    Spacer(modifier = Modifier.height(topPad))
+                    Column {
+                        Text(
+                            text = node.text,
+                            style = textStyle,
+                            fontWeight = if (node.level <= 3) FontWeight.Bold else FontWeight.SemiBold,
+                            color = headingColor
+                        )
+                        if (node.level <= 2) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            HorizontalDivider(color = hrColor, thickness = 1.dp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(botPad))
+                }
+
+                is MarkdownNode.BlockQuote -> {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Box(modifier = Modifier
+                            .width(4.dp)
+                            .defaultMinSize(minHeight = 32.dp)
+                            .background(blockQuoteBorder, RoundedCornerShape(2.dp))
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(color = blockQuoteBg, shape = RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp), modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = parseInlineMarkdown(node.text, codeInlineBg, codeInlineFg),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
+                is MarkdownNode.BulletItem -> {
+                    val bullet = when (node.indent) { 0 -> "•"; 1 -> "◦"; else -> "▸" }
+                    Row(modifier = Modifier.padding(start = (8 + node.indent * 16).dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.Top) {
+                        Text(bullet, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 1.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(parseInlineMarkdown(node.text, codeInlineBg, codeInlineFg), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                    }
+                }
+
+                is MarkdownNode.NumberedItem -> {
+                    Row(modifier = Modifier.padding(start = (8 + node.indent * 16).dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.Top) {
+                        Text("${node.number}.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.width(24.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(parseInlineMarkdown(node.text, codeInlineBg, codeInlineFg), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                    }
+                }
+
+                is MarkdownNode.CheckItem -> {
+                    Row(modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (node.checked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank, null,
+                            tint = if (node.checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(parseInlineMarkdown(node.text, codeInlineBg, codeInlineFg),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (node.checked) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface,
+                            textDecoration = if (node.checked) TextDecoration.LineThrough else TextDecoration.None)
+                    }
+                }
+
+                is MarkdownNode.CodeBlockNode -> {
                     Spacer(modifier = Modifier.height(8.dp))
+                    GitHubCodeBlock(code = node.code, language = node.language, isDark = isDark)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                is MarkdownNode.TableBlock -> {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    GitHubTable(
+                        headers = node.headers,
+                        rows = node.rows,
+                        borderColor = tableBorderColor,
+                        headerBg = tableHeaderBg,
+                        altRowBg = tableAltBg,
+                        codeInlineBg = codeInlineBg,
+                        codeInlineFg = codeInlineFg
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                is MarkdownNode.Paragraph -> {
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = line.substring(3).replace("**", ""),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary
+                        text = parseInlineMarkdown(node.text, codeInlineBg, codeInlineFg),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        lineHeight = 22.sp
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                 }
-                line.startsWith("### ") -> {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = line.substring(4).replace("**", ""),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                line.startsWith("- [ ] ") -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 2.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckBoxOutlineBlank,
-                            contentDescription = "Unchecked",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = parseBoldMarkdown(line.substring(6)),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-                line.startsWith("- [x] ") || line.startsWith("- [X] ") -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 2.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckBox,
-                            contentDescription = "Checked",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = parseBoldMarkdown(line.substring(6)),
-                            style = MaterialTheme.typography.bodyMedium,
-                            textDecoration = TextDecoration.LineThrough,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
-                    }
-                }
-                line.startsWith("- ") || line.startsWith("* ") -> {
-                    Row(
-                        modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 2.dp)
-                    ) {
-                        Text(
-                            text = "•",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = parseBoldMarkdown(line.substring(2)),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-                line.startsWith("|") && line.contains("---") -> {
-                    // Skip markdown separator lines in tables
-                    continue
-                }
-                line.startsWith("|") -> {
-                    // Clean and style table records beautifully in monospace
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        shape = RoundedCornerShape(4.dp),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)
-                    ) {
-                        Text(
-                            text = line,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.padding(6.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                trimmedLine.isEmpty() -> {
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-                else -> {
-                    Text(
-                        text = parseBoldMarkdown(line),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
             }
-        }
-        if (inCodeBlock && codeBlockLines.isNotEmpty()) {
-            CodeBlock(codeBlockLines.joinToString("\n"), codeBlockLanguage)
         }
     }
 }
 
-fun parseBoldMarkdown(text: String): AnnotatedString {
-    return buildAnnotatedString {
-        var i = 0
-        while (i < text.length) {
-            if (text.startsWith("**", i)) {
-                val end = text.indexOf("**", i + 2)
-                if (end != -1) {
-                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                        append(text.substring(i + 2, end))
-                    }
-                    i = end + 2
-                } else {
-                    append("**")
-                    i += 2
-                }
-            } else if (text.getOrNull(i) == '`') {
-                val end = text.indexOf('`', i + 1)
-                if (end != -1) {
-                    withStyle(style = SpanStyle(
-                        fontFamily = FontFamily.Monospace,
-                        color = Color(0xFFC2185B),
-                        background = Color(0xFFFCE4EC)
-                    )) {
-                        append(text.substring(i + 1, end))
-                    }
-                    i = end + 1
-                } else {
-                    append("`")
-                    i += 1
-                }
-            } else {
-                append(text[i])
-                i++
-            }
-        }
-    }
-}
+// Legacy helpers for backward compat
+fun parseBoldMarkdown(text: String): AnnotatedString =
+    parseInlineMarkdown(text, Color(0xFF2D333B), Color(0xFFE06C75))
 
 @Composable
 fun CodeBlock(code: String, language: String) {
-    Surface(
-        color = Color(0xFF1E1E1E), // Obsidian dark editor background
-        shape = RoundedCornerShape(8.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            if (language.isNotEmpty()) {
-                Text(
-                    text = language.uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray,
-                    fontWeight = FontWeight.Black,
-                    modifier = Modifier.padding(bottom = 6.dp)
-                )
-            }
-            Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                Text(
-                    text = code,
-                    style = TextStyle(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        color = Color(0xFFE0E0E0)
-                    )
-                )
-            }
-        }
-    }
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    GitHubCodeBlock(code = code, language = language, isDark = isDark)
 }
 
-// ==========================================
-// SHARING & DOWNLOAD HELPERS
-// ==========================================
 
-fun downloadBlueprint(context: Context, repoName: String, blueprint: String) {
-    try {
-        val fileName = "${repoName.replace("/", "_")}_security_blueprint.md"
-        
-        // Write file directly into standard Download folder
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        if (!downloadsDir.exists()) {
-            downloadsDir.mkdirs()
-        }
-        val file = File(downloadsDir, fileName)
-        file.writeText(blueprint)
-
-        Toast.makeText(context, "Blueprint baixado em: Downloads/$fileName", Toast.LENGTH_LONG).show()
-    } catch (e: Exception) {
-        Toast.makeText(context, "Falha ao salvar: ${e.message}", Toast.LENGTH_SHORT).show()
-    }
-}
 
 fun shareBlueprint(context: Context, repoName: String, blueprint: String) {
     try {
@@ -1667,5 +1804,18 @@ fun shareBlueprint(context: Context, repoName: String, blueprint: String) {
         context.startActivity(shareIntent)
     } catch (e: Exception) {
         Toast.makeText(context, "Não foi possível compartilhar.", Toast.LENGTH_SHORT).show()
+    }
+}
+
+fun downloadBlueprint(context: Context, repoName: String, blueprint: String) {
+    try {
+        val fileName = "${repoName.replace("/", "_")}_security_blueprint.md"
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        if (!downloadsDir.exists()) { downloadsDir.mkdirs() }
+        val file = File(downloadsDir, fileName)
+        file.writeText(blueprint)
+        Toast.makeText(context, "Blueprint baixado em: Downloads/$fileName", Toast.LENGTH_LONG).show()
+    } catch (e: Exception) {
+        Toast.makeText(context, "Falha ao salvar: ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }
