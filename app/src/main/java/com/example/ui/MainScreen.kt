@@ -507,40 +507,73 @@ fun FileSelectorScreen(
         Card(
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
             ),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    text = "Configuração do Auditor",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Modelo Inteligente:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = "Configuração do Auditor",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = viewModel.selectedModel == "gemini-3.5-flash",
-                            onClick = { viewModel.selectedModel = "gemini-3.5-flash" },
-                            label = { Text("Gemini 3.5 Flash") }
-                        )
-                        FilterChip(
-                            selected = viewModel.selectedModel == "gemini-3.1-pro-preview",
-                            onClick = { viewModel.selectedModel = "gemini-3.1-pro-preview" },
-                            label = { Text("Gemini 3.1 Pro") }
-                        )
-                    }
+                    Text(
+                        text = "Modelo Ativo",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+
+                val currentModel by viewModel.selectedModelFlow.collectAsStateWithLifecycle()
+
+                OutlinedTextField(
+                    value = currentModel,
+                    onValueChange = { viewModel.selectedModel = it },
+                    label = { Text("Nome do Modelo Gemini", style = MaterialTheme.typography.bodySmall) },
+                    placeholder = { Text("Ex: gemini-1.5-flash") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("main_model_name_input"),
+                    textStyle = MaterialTheme.typography.bodyMedium
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Atalhos rápidos:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = currentModel == "gemini-1.5-flash",
+                        onClick = { viewModel.selectedModel = "gemini-1.5-flash" },
+                        label = { Text("1.5 Flash", style = MaterialTheme.typography.bodySmall) }
+                    )
+                    FilterChip(
+                        selected = currentModel == "gemini-1.5-pro",
+                        onClick = { viewModel.selectedModel = "gemini-1.5-pro" },
+                        label = { Text("1.5 Pro", style = MaterialTheme.typography.bodySmall) }
+                    )
+                    FilterChip(
+                        selected = currentModel == "gemini-2.5-flash",
+                        onClick = { viewModel.selectedModel = "gemini-2.5-flash" },
+                        label = { Text("2.5 Flash", style = MaterialTheme.typography.bodySmall) }
+                    )
                 }
             }
         }
@@ -978,6 +1011,8 @@ fun SeverityTag(count: Int, color: Color, label: String) {
 fun SettingsTabContent(viewModel: AuditViewModel) {
     var tokenInput by remember { mutableStateOf(viewModel.githubToken) }
     var keyInput by remember { mutableStateOf(viewModel.geminiApiKey) }
+    val activeModelFlowState by viewModel.selectedModelFlow.collectAsStateWithLifecycle()
+    var modelInput by remember(activeModelFlowState) { mutableStateOf(activeModelFlowState) }
     var hideToken by remember { mutableStateOf(true) }
     var hideKey by remember { mutableStateOf(true) }
 
@@ -1079,27 +1114,55 @@ fun SettingsTabContent(viewModel: AuditViewModel) {
         // Model Selection Dropdown/Radio
         Text(
             text = "Modelo de Análise Padrão",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = modelInput,
+            onValueChange = { modelInput = it },
+            label = { Text("Nome do Modelo Gemini") },
+            placeholder = { Text("Ex: gemini-1.5-flash") },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("model_name_settings_input")
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "Atalhos rápidos:",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(6.dp))
         Row(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(
-                    selected = viewModel.selectedModel == "gemini-3.5-flash",
-                    onClick = { viewModel.selectedModel = "gemini-3.5-flash" }
+                    selected = modelInput == "gemini-1.5-flash",
+                    onClick = { modelInput = "gemini-1.5-flash" }
                 )
-                Text("Gemini 3.5 Flash", style = MaterialTheme.typography.bodyMedium)
+                Text("1.5 Flash", style = MaterialTheme.typography.bodyMedium)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(
-                    selected = viewModel.selectedModel == "gemini-3.1-pro-preview",
-                    onClick = { viewModel.selectedModel = "gemini-3.1-pro-preview" }
+                    selected = modelInput == "gemini-1.5-pro",
+                    onClick = { modelInput = "gemini-1.5-pro" }
                 )
-                Text("Gemini 3.1 Pro", style = MaterialTheme.typography.bodyMedium)
+                Text("1.5 Pro", style = MaterialTheme.typography.bodyMedium)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(
+                    selected = modelInput == "gemini-2.5-flash",
+                    onClick = { modelInput = "gemini-2.5-flash" }
+                )
+                Text("2.5 Flash", style = MaterialTheme.typography.bodyMedium)
             }
         }
 
@@ -1110,6 +1173,7 @@ fun SettingsTabContent(viewModel: AuditViewModel) {
             onClick = {
                 viewModel.githubToken = tokenInput.trim()
                 viewModel.geminiApiKey = keyInput.trim()
+                viewModel.selectedModel = modelInput.trim()
                 Toast.makeText(context, "Configurações salvas com sucesso!", Toast.LENGTH_SHORT).show()
             },
             shape = RoundedCornerShape(12.dp),

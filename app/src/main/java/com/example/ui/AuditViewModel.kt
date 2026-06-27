@@ -61,9 +61,13 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
             prefs.geminiApiKey = value
         }
 
+    private val _selectedModel = MutableStateFlow(prefs.selectedModel)
+    val selectedModelFlow: StateFlow<String> = _selectedModel.asStateFlow()
+
     var selectedModel: String
-        get() = prefs.selectedModel
+        get() = _selectedModel.value
         set(value) {
+            _selectedModel.value = value
             prefs.selectedModel = value
         }
 
@@ -261,6 +265,9 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
                 _analysisState.value = AnalysisState.Success(savedRecord)
                 _activeAuditDetail.value = savedRecord
 
+            } catch (e: retrofit2.HttpException) {
+                val errorBody = e.response()?.errorBody()?.string()
+                _analysisState.value = AnalysisState.Error("Análise falhou (HTTP ${e.code()}): ${errorBody ?: e.message()}")
             } catch (e: Exception) {
                 _analysisState.value = AnalysisState.Error("Análise falhou: ${e.localizedMessage ?: e.message}")
             }

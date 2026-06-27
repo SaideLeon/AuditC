@@ -22,6 +22,6 @@ class PreferencesHelper(context: Context) {
         set(value) = prefs.edit().putString(KEY_GEMINI_API_KEY, value).apply()
 
     var selectedModel: String
-        get() = prefs.getString(KEY_SELECTED_MODEL, "gemini-3.5-flash") ?: "gemini-3.5-flash"
+        get() = prefs.getString(KEY_SELECTED_MODEL, "gemini-1.5-flash") ?: "gemini-1.5-flash"
         set(value) = prefs.edit().putString(KEY_SELECTED_MODEL, value).apply()
 }
