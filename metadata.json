@@ -1,0 +1,6 @@
+{
+  "name": "SecurAudit",
+  "description": "Code Security Auditor & Blueprint Generator powered by Gemini AI & GitHub Integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
